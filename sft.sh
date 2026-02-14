@@ -1,6 +1,12 @@
 export NCCL_IB_DISABLE=1        # 完全禁用 IB/RoCE
 # Office_Products, Industrial_and_Scientific
 for category in "Industrial_and_Scientific"; do
+    USE_CTR_HEAD=true
+    LAMBDA_CTR=0.5
+    USE_HISTORY_COMPRESSION=true
+    HISTORY_THRESHOLD=100
+    COMPRESSION_TYPE=attention
+
     train_file=$(ls -f ./data/Amazon/train/${category}*11.csv)
     eval_file=$(ls -f ./data/Amazon/valid/${category}*11.csv)
     test_file=$(ls -f ./data/Amazon/test/${category}*11.csv)
@@ -22,5 +28,10 @@ for category in "Industrial_and_Scientific"; do
             --seed 42 \
             --sid_index_path ./data/Amazon/index/Industrial_and_Scientific.index.json \
             --item_meta_path ./data/Amazon/index//Industrial_and_Scientific.item.json \
-            --freeze_LLM False
+            --freeze_LLM False \
+            --use_ctr_head ${USE_CTR_HEAD} \
+            --lambda_ctr ${LAMBDA_CTR} \
+            --use_history_compression ${USE_HISTORY_COMPRESSION} \
+            --history_threshold ${HISTORY_THRESHOLD} \
+            --compression_type ${COMPRESSION_TYPE}
 done

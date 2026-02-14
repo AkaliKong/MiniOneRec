@@ -4,6 +4,10 @@ for category in "Industrial_and_Scientific"
 do
     # your model path
     exp_name="xxx"
+    USE_CTR_HEAD=true
+    USE_HISTORY_COMPRESSION=true
+    HISTORY_THRESHOLD=100
+    COMPRESSION_TYPE=attention
 
     exp_name_clean=$(basename "$exp_name")
     echo "Processing category: $category with model: $exp_name_clean (STANDARD MODE)"
@@ -50,7 +54,11 @@ do
                 --max_new_tokens 256 \
                 --temperature 1.0 \
                 --guidance_scale 1.0 \
-                --length_penalty 0.0 &
+                --length_penalty 0.0 \
+                --use_ctr_head ${USE_CTR_HEAD} \
+                --use_history_compression ${USE_HISTORY_COMPRESSION} \
+                --history_threshold ${HISTORY_THRESHOLD} \
+                --compression_type ${COMPRESSION_TYPE} &
         else
             echo "Warning: Split file $temp_dir/${i}.csv not found, skipping GPU $i"
         fi

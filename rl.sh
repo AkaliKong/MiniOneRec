@@ -3,6 +3,13 @@
 export NCCL_IB_DISABLE=1        # 完全禁用 IB/RoCE
 
 for category in "Industrial_and_Scientific"; do
+    ALPHA_CTR=1.0
+    ALPHA_RANK=0.5
+    ALPHA_ACC=0.5
+    USE_HISTORY_COMPRESSION=true
+    HISTORY_THRESHOLD=100
+    COMPRESSION_TYPE=attention
+
     train_file=$(ls -f ./data/Amazon/train/${category}*.csv)
     eval_file=$(ls -f ./data/Amazon/valid/${category}*11.csv)
     info_file=$(ls -f ./data/Amazon/info/${category}*.txt)
@@ -22,7 +29,7 @@ for category in "Industrial_and_Scientific"; do
                         --category ${category} \
                         --sample_train False \
                         --eval_step 0.0999 \
-                        --reward_type ranking \
+                        --reward_type hybrid \
                         --num_generations 16 \
                         --mask_all_zero False \
                         --dynamic_sampling False \
@@ -37,5 +44,11 @@ for category in "Industrial_and_Scientific"; do
                         --output_dir output_dir \
                         --wandb_run_name wandb_name \
                         --sid_index_path ./data/Amazon/index/Industrial_and_Scientific.index.json \
-                        --item_meta_path ./data/Amazon/index/Industrial_and_Scientific.item.json
+                        --item_meta_path ./data/Amazon/index/Industrial_and_Scientific.item.json \
+                        --alpha_ctr ${ALPHA_CTR} \
+                        --alpha_rank ${ALPHA_RANK} \
+                        --alpha_acc ${ALPHA_ACC} \
+                        --use_history_compression ${USE_HISTORY_COMPRESSION} \
+                        --history_threshold ${HISTORY_THRESHOLD} \
+                        --compression_type ${COMPRESSION_TYPE}
 done

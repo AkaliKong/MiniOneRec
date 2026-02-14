@@ -9,6 +9,7 @@ from tqdm import tqdm
 import os
 import copy
 import torch.nn.functional as F
+from history_compression import HistoryCompressionConfig, format_compressed_history
 
 class Tokenizer:
     def __init__(self, tokenizer):
@@ -82,6 +83,21 @@ class BaseDataset(Dataset):
 {data_point["input"]}
 
 ### Response:\n{data_point["output"]}"""
+
+    @staticmethod
+    def get_click_label(row, default: float = 1.0) -> float:
+        """Return click label if present, otherwise fallback to default."""
+        if "click_label" in row and pd.notna(row["click_label"]):
+            try:
+                return float(row["click_label"])
+            except (TypeError, ValueError):
+                return default
+        if "label" in row and pd.notna(row["label"]):
+            try:
+                return float(row["label"])
+            except (TypeError, ValueError):
+                return default
+        return default
 
 
 class CSVBaseDataset(BaseDataset):    
@@ -178,6 +194,10 @@ class SFTData(CSVBaseDataset):
             return {
                 "input_ids": tokens,
                 "attention_mask": attention_mask,
+                "click_label": float(history.get("click_label", 1.0)),
+                "long_history_len": int(history.get("long_history_len", 0)),
+                "short_history_len": int(history.get("short_history_len", 0)),
+                "history_total_len": int(history.get("history_total_len", 0)),
                 
             }    
         
@@ -195,6 +215,10 @@ class SFTData(CSVBaseDataset):
             "input_ids": tokens[-self.max_len:],
             "attention_mask": attention_mask[-self.max_len:],
             "labels": labels[-self.max_len:],
+            "click_label": float(history.get("click_label", 1.0)),
+            "long_history_len": int(history.get("long_history_len", 0)),
+            "short_history_len": int(history.get("short_history_len", 0)),
+            "history_total_len": int(history.get("history_total_len", 0)),
             
         }
 
@@ -352,9 +376,25 @@ class EvalD3Dataset(CSVBaseDataset):
 
 
 class SidDataset(CSVBaseDataset):
-    def __init__(self, train_file, max_len=2048, sample=-1, seed=0, category="", dedup=False):
+    def __init__(
+        self,
+        train_file,
+        max_len=2048,
+        sample=-1,
+        seed=0,
+        category="",
+        dedup=False,
+        use_history_compression: bool = False,
+        history_threshold: int = 100,
+        compression_type: str = "attention",
+    ):
         super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer=None, test=False)
 
+        self.history_cfg = HistoryCompressionConfig(
+            use_history_compression=use_history_compression,
+            history_threshold=history_threshold,
+            compression_type=compression_type,
+        )
         self.prompt2history = {}
         self.history2target = {}
         self.get_inputs()  
@@ -362,21 +402,19 @@ class SidDataset(CSVBaseDataset):
     def get_history(self, row):
         row['history_item_sid'] = eval(row['history_item_sid'])
         L = len(row['history_item_sid']) 
-        history = ""
+        history, history_meta = format_compressed_history(row["history_item_sid"], self.history_cfg)
         history_str = "::".join(row["history_item_sid"])
-        for i in range(L):
-            if i == 0:
-                history += row['history_item_sid'][i]
-            else:
-                history += ", " + row['history_item_sid'][i]      
         target_item = str(row['item_sid'])
         target_item_sid = row["item_sid"]
         last_history_item_sid = row['history_item_sid'][-1] if row['history_item_sid'] else None
+        click_label = self.get_click_label(row)
         return {"input": f"The user has interacted with items {history} in chronological order. Can you predict the next possible item that the user may expect?",
                 # Analyze user preferences and then predict the semantic ID of the next item.
                 "output": target_item + "\n",
                 "history_str": history_str,
-                "dedup": target_item_sid == last_history_item_sid}
+                "dedup": target_item_sid == last_history_item_sid,
+                "click_label": click_label,
+                **history_meta}
     
     def pre(self, idx):
         history = self.get_history(self.data.iloc[idx])
@@ -390,33 +428,54 @@ class SidDataset(CSVBaseDataset):
         return {
             "prompt": prompt,
             "completion": target_item,
+            "click_label": float(history.get("click_label", 1.0)),
+            "long_history_len": int(history.get("long_history_len", 0)),
+            "short_history_len": int(history.get("short_history_len", 0)),
+            "history_total_len": int(history.get("history_total_len", 0)),
 
         }
 
 
 class SidSFTDataset(CSVBaseDataset):
-    def __init__(self, train_file, tokenizer, max_len=2048, sample=-1, test=False, seed=0, category="", K=4, dedup=False):
+    def __init__(
+        self,
+        train_file,
+        tokenizer,
+        max_len=2048,
+        sample=-1,
+        test=False,
+        seed=0,
+        category="",
+        K=4,
+        dedup=False,
+        use_history_compression: bool = False,
+        history_threshold: int = 100,
+        compression_type: str = "attention",
+    ):
         super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer, test)
 
+        self.history_cfg = HistoryCompressionConfig(
+            use_history_compression=use_history_compression,
+            history_threshold=history_threshold,
+            compression_type=compression_type,
+        )
         self.get_inputs()
 
     def get_history(self, row):
         row['history_item_sid'] = eval(row['history_item_sid'])
         L = len(row['history_item_sid']) 
-        history = ""
+        history, history_meta = format_compressed_history(row["history_item_sid"], self.history_cfg)
         history_str = ", ".join(row["history_item_sid"])
-        for i in range(L):
-            if i == 0:
-                history += row['history_item_sid'][i]
-            else:
-                history += ", " + row['history_item_sid'][i]      
         target_item = str(row['item_sid'])
         target_item_sid = row["item_sid"]
         last_history_item_sid = row['history_item_sid'][-1] if row['history_item_sid'] else None
+        click_label = self.get_click_label(row)
         return {"input": f"The user has interacted with items {history} in chronological order. Can you predict the next possible item that the user may expect?",
                 "output": target_item + "\n",
                 "history_str": history_str,
-                "dedup": target_item_sid == last_history_item_sid}
+                "dedup": target_item_sid == last_history_item_sid,
+                "click_label": click_label,
+                **history_meta}
     
     def pre(self, idx):
         instruction = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request. 
@@ -448,6 +507,7 @@ Can you predict the next possible item that the user may expect?
             return {
                 "input_ids": tokens,
                 "attention_mask": attention_mask,
+                "click_label": float(history.get("click_label", 1.0)),
             }    
         
         golden_tokens = self.tokenizer.encode(target_item, bos=False, eos=True)
@@ -463,6 +523,10 @@ Can you predict the next possible item that the user may expect?
             "input_ids": tokens[-self.max_len:],
             "attention_mask": attention_mask[-self.max_len:],
             "labels": labels[-self.max_len:],
+            "click_label": float(history.get("click_label", 1.0)),
+            "long_history_len": int(history.get("long_history_len", 0)),
+            "short_history_len": int(history.get("short_history_len", 0)),
+            "history_total_len": int(history.get("history_total_len", 0)),
         }
 
 
@@ -596,9 +660,28 @@ Can you predict the next possible item that the user may expect?
 
 class EvalSidDataset(CSVBaseDataset):
 
-    def __init__(self, train_file, tokenizer, max_len=2048, sample=-1, test = False, seed=0, category="", K=4, dedup=False):
+    def __init__(
+        self,
+        train_file,
+        tokenizer,
+        max_len=2048,
+        sample=-1,
+        test = False,
+        seed=0,
+        category="",
+        K=4,
+        dedup=False,
+        use_history_compression: bool = False,
+        history_threshold: int = 100,
+        compression_type: str = "attention",
+    ):
         super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer, test)
 
+        self.history_cfg = HistoryCompressionConfig(
+            use_history_compression=use_history_compression,
+            history_threshold=history_threshold,
+            compression_type=compression_type,
+        )
         self.get_inputs()  
 
     def generate_example_prompt(self, data_point):
@@ -611,19 +694,17 @@ class EvalSidDataset(CSVBaseDataset):
     def get_history(self, row):
         row['history_item_sid'] = eval(row['history_item_sid'])
         L = len(row['history_item_sid']) 
-        history = ""
-        for i in range(L):
-            if i == 0:
-                history += row['history_item_sid'][i]
-            else:
-                history += ", " + row['history_item_sid'][i]      
+        history, history_meta = format_compressed_history(row["history_item_sid"], self.history_cfg)
         target_item = str(row['item_sid'])
         target_item_sid = row["item_sid"]
         last_history_item_sid = row['history_item_sid'][-1] if row['history_item_sid'] else None
+        click_label = self.get_click_label(row)
         return {"input": # f"The user has interacted with items {history} in chronological order. Can you predict the next possible item that the user may expect?",
                 f"Can you predict the next possible item the user may expect, given the following chronological interaction history: {history}",
                 "output": target_item + '\n',
-                "dedup": target_item_sid == last_history_item_sid}
+                "dedup": target_item_sid == last_history_item_sid,
+                "click_label": click_label,
+                **history_meta}
     
     
     def pre(self, idx):
@@ -654,7 +735,10 @@ Can you predict the next possible item that the user may expect?
             return {
                 "input_ids": tokens,
                 "attention_mask": attention_mask,
-                
+                "click_label": float(history.get("click_label", 1.0)),
+                "long_history_len": int(history.get("long_history_len", 0)),
+                "short_history_len": int(history.get("short_history_len", 0)),
+                "history_total_len": int(history.get("history_total_len", 0)),
             }    
         
         golden_tokens = self.tokenizer.encode(target_item, bos=False, eos=True)
@@ -671,7 +755,10 @@ Can you predict the next possible item that the user may expect?
             "input_ids": tokens[-self.max_len:],
             "attention_mask": attention_mask[-self.max_len:],
             "labels": labels[-self.max_len:],
-            
+            "click_label": float(history.get("click_label", 1.0)),
+            "long_history_len": int(history.get("long_history_len", 0)),
+            "short_history_len": int(history.get("short_history_len", 0)),
+            "history_total_len": int(history.get("history_total_len", 0)),
         }
 
 
@@ -766,6 +853,7 @@ Answer the question about item identification.
             return {
                 "input_ids": tokens,
                 "attention_mask": attention_mask,
+                "click_label": 1.0,
             }
         
         target = data_point['output'] + '\n'
@@ -783,6 +871,7 @@ Answer the question about item identification.
             "input_ids": tokens[-self.max_len:],
             "attention_mask": attention_mask[-self.max_len:],
             "labels": labels[-self.max_len:],
+            "click_label": 1.0,
         }
 
 
@@ -883,6 +972,7 @@ class RLTitle2SidDataset(JSONBaseDataset):
         return {
             "prompt": prompt,
             "completion": target_item,
+            "click_label": 1.0,
  
         }
 
@@ -958,10 +1048,12 @@ class RLSeqTitle2SidDataset(CSVBaseDataset):
         
         self.prompt2history[formatted_prompt] = history_data['history_str']
         self.history2target[history_data['history_str']] = target
+        click_label = self.get_click_label(self.data.iloc[idx])
         
         return {
             "prompt": formatted_prompt,
             "completion": target,
+            "click_label": float(click_label),
 
         }
 
@@ -1032,6 +1124,7 @@ class RLSid2TitleDataset(JSONBaseDataset):
         return {
             "prompt": prompt,
             "completion": target_item,
+            "click_label": 1.0,
 
         }
 
@@ -1119,12 +1212,28 @@ class RLSidhis2TitleDataset(BaseDataset):
         return {
             "prompt": prompt,
             "completion": target_item,
+            "click_label": 1.0,
 
         }
 
 
 class FusionSeqRecDataset(BaseDataset):
-    def __init__(self, train_file, item_file, index_file, tokenizer, max_len=2048, sample=-1, test=False, seed=0, category="", dedup=False):
+    def __init__(
+        self,
+        train_file,
+        item_file,
+        index_file,
+        tokenizer,
+        max_len=2048,
+        sample=-1,
+        test=False,
+        seed=0,
+        category="",
+        dedup=False,
+        use_history_compression: bool = False,
+        history_threshold: int = 100,
+        compression_type: str = "attention",
+    ):
         """
         Fusion dataset combining sequence recommendation with item features.
         Uses semantic IDs for user history, outputs item titles or descriptions.
@@ -1142,6 +1251,11 @@ class FusionSeqRecDataset(BaseDataset):
             dedup: Whether to filter duplicate items
         """
         BaseDataset.__init__(self, tokenizer, max_len, test, category, dedup, seed)
+        self.history_cfg = HistoryCompressionConfig(
+            use_history_compression=use_history_compression,
+            history_threshold=history_threshold,
+            compression_type=compression_type,
+        )
         
         # Initialize CSV part
         self.data = pd.read_csv(train_file)
@@ -1234,7 +1348,8 @@ class FusionSeqRecDataset(BaseDataset):
     
     def get_history(self, row):
         history_item_sid = eval(row['history_item_sid'])
-        history_str = ", ".join(history_item_sid)
+        history_str, history_meta = format_compressed_history(history_item_sid, self.history_cfg)
+        history_raw = ", ".join(history_item_sid)
         
         target_sid = row['item_sid']
         
@@ -1262,10 +1377,13 @@ class FusionSeqRecDataset(BaseDataset):
         
         return {
             "history_str": history_str,
+            "history_raw": history_raw,
             "target_title": target_title,
             "target_description": target_description,
             "target_sid": target_sid,
-            "dedup": is_duplicate
+            "dedup": is_duplicate,
+            "click_label": self.get_click_label(row),
+            **history_meta,
         }
     
     def generate_formatted_prompt(self, prompt, response):
@@ -1311,6 +1429,10 @@ Can you recommend the next item for the user based on their interaction history?
             return {
                 "input_ids": tokens,
                 "attention_mask": attention_mask,
+                "click_label": float(history_data.get("click_label", 1.0)),
+                "long_history_len": int(history_data.get("long_history_len", 0)),
+                "short_history_len": int(history_data.get("short_history_len", 0)),
+                "history_total_len": int(history_data.get("history_total_len", 0)),
             }
         
         golden_tokens = self.tokenizer.encode(target, bos=False, eos=True)
@@ -1326,6 +1448,10 @@ Can you recommend the next item for the user based on their interaction history?
             "input_ids": tokens[-self.max_len:],
             "attention_mask": attention_mask[-self.max_len:],
             "labels": labels[-self.max_len:],
+            "click_label": float(history_data.get("click_label", 1.0)),
+            "long_history_len": int(history_data.get("long_history_len", 0)),
+            "short_history_len": int(history_data.get("short_history_len", 0)),
+            "history_total_len": int(history_data.get("history_total_len", 0)),
         }
 
 

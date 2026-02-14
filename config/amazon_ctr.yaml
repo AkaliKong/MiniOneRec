@@ -1,0 +1,11 @@
+# CTR + history compression feature flags
+use_ctr_head: true
+lambda_ctr: 0.5
+alpha_ctr: 1.0
+alpha_rank: 0.5
+alpha_acc: 0.5
+normalize_ctr_reward: false
+
+use_history_compression: true
+history_threshold: 100
+compression_type: attention

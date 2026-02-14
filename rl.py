@@ -1,46 +1,74 @@
-from datasets import Dataset
-from trl import GRPOConfig, GRPOTrainer
+import math
+import os
+import pickle
 import random
+from typing import Any, Dict, List
+
 import numpy as np
 import torch
-from data import D3Dataset, SidDataset, RLTitle2SidDataset, RLSeqTitle2SidDataset, RLSid2TitleDataset, RLSidhis2TitleDataset
+from datasets import Dataset
+from fire import Fire
 from torch.utils.data import ConcatDataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
-import os
+from trl import GRPOConfig
+
+from data import RLSeqTitle2SidDataset, RLTitle2SidDataset, SidDataset
 from minionerec_trainer import ReReTrainer
 from sasrec import SASRec
-from fire import Fire
-import pickle
-import math
-import json
-from sklearn.metrics import ndcg_score
 
-os.environ['WANDB_MODE'] = 'disabled'
+os.environ["WANDB_MODE"] = "disabled"
 
-def set_seed(seed):
+
+def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+        torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+
+def _concat_to_hf(dataset: ConcatDataset) -> Dataset:
+    rows = [sample for sample in dataset if sample is not None]
+    if not rows:
+        raise ValueError("No valid RL samples found.")
+
+    keys = sorted({key for row in rows for key in row.keys()})
+    defaults: Dict[str, Any] = {
+        "click_label": 1.0,
+        "long_history_len": 0,
+        "short_history_len": 0,
+        "history_total_len": 0,
+    }
+
+    data = {k: [] for k in keys}
+    for row in rows:
+        for key in keys:
+            if key in row:
+                data[key].append(row[key])
+            elif key in defaults:
+                data[key].append(defaults[key])
+            else:
+                raise KeyError(f"Missing key `{key}` in RL sample.")
+    return Dataset.from_dict(data)
+
+
+def _normalize(values: List[float], eps: float = 1e-6) -> List[float]:
+    arr = np.asarray(values, dtype=np.float32)
+    return ((arr - arr.mean()) / max(arr.std(), eps)).tolist()
+
+
 def train(
-    # model/data params
     model_path: str = "",
     seed: int = 42,
     train_file: str = "",
     eval_file: str = "",
     info_file: str = "",
     category: str = "",
-    
-    # wandb params
     wandb_project: str = "",
     wandb_run_name: str = "",
-    
-    # training hyperparams
     output_dir: str = "",
     train_batch_size: int = 32,
     eval_batch_size: int = 32,
@@ -58,7 +86,7 @@ def train(
     mask_all_zero: bool = False,
     sync_ref_model: bool = False,
     test_beam: int = 20,
-    reward_type: str = "rule",
+    reward_type: str = "hybrid",
     sample_train: bool = False,
     ada_path: str = "",
     cf_path: str = "",
@@ -66,225 +94,227 @@ def train(
     item_meta_path: str = "",
     dapo: bool = False,
     gspo: bool = False,
-):
-    torch.backends.cuda.enable_flash_sdp(False)  
+    alpha_ctr: float = 1.0,
+    alpha_rank: float = 0.5,
+    alpha_acc: float = 0.5,
+    normalize_ctr_reward: bool = False,
+    use_history_compression: bool = False,
+    history_threshold: int = 100,
+    compression_type: str = "attention",
+) -> None:
+    del mask_all_zero
+
+    torch.backends.cuda.enable_flash_sdp(False)
     torch.backends.cuda.enable_mem_efficient_sdp(False)
     set_seed(seed)
-    
-    category_dict = {"Industrial_and_Scientific": "industrial and scientific items", "Office_Products": "office products", "Toys_and_Games": "toys and games", "Sports": "sports and outdoors", "Books": "books"}
-    print(category)
-    
-    
-    with open(info_file, 'r') as f:
+
+    category_dict = {
+        "Industrial_and_Scientific": "industrial and scientific items",
+        "Office_Products": "office products",
+        "Toys_and_Games": "toys and games",
+        "Sports": "sports and outdoors",
+        "Books": "books",
+    }
+    category_text = category_dict.get(category, category)
+
+    with open(info_file, "r", encoding="utf-8") as f:
         info = f.readlines()
-        # Extract semantic_id (first column) from the format: semantic_id \t item_title \t item_id
-        item_name = [_.split('\t')[0].strip() for _ in info]
+        item_name = [_.split("\t")[0].strip() for _ in info]
         item2id = {name: i for i, name in enumerate(item_name)}
 
     sample = -1
     train_datasets = []
-    # train_data = D3Dataset(train_file, category=category_dict[category], sample=sample)
-    # train_datasets.append(train_data)
-    train_data1 = SidDataset(train_file, category=category_dict[category], sample=sample)
+    train_data1 = SidDataset(
+        train_file,
+        category=category_text,
+        sample=sample,
+        use_history_compression=use_history_compression,
+        history_threshold=history_threshold,
+        compression_type=compression_type,
+    )
     train_datasets.append(train_data1)
-    train_data2 = RLTitle2SidDataset(item_file=item_meta_path, index_file=sid_index_path, category=category_dict[category], sample=sample)
-    train_datasets.append(train_data2)
-    train_data3 = RLSeqTitle2SidDataset(train_file, category=category_dict[category], sample=10000)
-    train_datasets.append(train_data3)
-    # train_data4 = RLSid2TitleDataset(item_file=item_meta_path, index_file=sid_index_path, category=category_dict[category], sample=sample)
-    # train_datasets.append(train_data4)
-    # train_data5 = RLSidhis2TitleDataset(train_file, item_file=item_meta_path, index_file=sid_index_path, category=category_dict[category], sample=sample)
-    # train_datasets.append(train_data5)
-    # train_data6 = RLTitle2Sid_1LayerDataset(item_file=item_meta_path, index_file=sid_index_path, category=category_dict[category], sample=sample)
-    # train_datasets.append(train_data6)
-    # train_data7 = RLTitle2Sid_2LayerDataset(item_file=item_meta_path, index_file=sid_index_path, category=category_dict[category], sample=sample)
-    # train_datasets.append(train_data7)
-    train_data = ConcatDataset(train_datasets)
-    # eval_data = D3Dataset(eval_file, category=category_dict[category], sample=sample)
-    eval_data = SidDataset(eval_file, category=category_dict[category], sample=sample)
 
-    train_dataset = Dataset.from_dict({k : [elm[k] for elm in train_data] for k in train_data[0].keys()})
-    train_dataset = train_dataset.shuffle(seed=seed) 
+    if item_meta_path and sid_index_path:
+        train_data2 = RLTitle2SidDataset(
+            item_file=item_meta_path,
+            index_file=sid_index_path,
+            category=category_text,
+            sample=sample,
+        )
+        train_datasets.append(train_data2)
+
+    train_data3 = RLSeqTitle2SidDataset(train_file, category=category_text, sample=10000)
+    train_datasets.append(train_data3)
+
+    train_data = ConcatDataset(train_datasets)
+    eval_data = SidDataset(
+        eval_file,
+        category=category_text,
+        sample=sample,
+        use_history_compression=use_history_compression,
+        history_threshold=history_threshold,
+        compression_type=compression_type,
+    )
+
+    train_dataset = _concat_to_hf(train_data).shuffle(seed=seed)
     if sample_train and "sft" in model_path:
         train_dataset = train_dataset.select(range(int(0.2 * len(train_dataset)), len(train_dataset)))
-    eval_dataset = Dataset.from_dict({k : [elm[k] for elm in eval_data] for k in eval_data[0].keys()})
-    eval_dataset = eval_dataset.shuffle(seed=seed)
-    
+    eval_dataset = Dataset.from_dict({k: [elm[k] for elm in eval_data] for k in eval_data[0].keys()}).shuffle(seed=seed)
 
-    # prompt2history = {**train_data.prompt2history, **eval_data.prompt2history}
-    # history2target = {**train_data.history2target, **eval_data.history2target}
-
-    prompt2history = {}
-    history2target = {}
-    
-    # Collect prompt2history and history2target from all train datasets
+    prompt2history: Dict[str, str] = {}
+    history2target: Dict[str, str] = {}
     for dataset in train_datasets:
-        if hasattr(dataset, 'prompt2history'):
+        if hasattr(dataset, "prompt2history"):
             prompt2history.update(dataset.prompt2history)
-        if hasattr(dataset, 'history2target'):
+        if hasattr(dataset, "history2target"):
             history2target.update(dataset.history2target)
-    
-    # Add eval_data mappings
-    if hasattr(eval_data, 'prompt2history'):
+    if hasattr(eval_data, "prompt2history"):
         prompt2history.update(eval_data.prompt2history)
-    if hasattr(eval_data, 'history2target'):
+    if hasattr(eval_data, "history2target"):
         history2target.update(eval_data.history2target)
-
-    print("train_dataset: ", train_dataset)
-    print("eval_dataset: ", eval_dataset)
 
     llm_model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16, device_map="auto")
     device = llm_model.device
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-    
+    del tokenizer
+
     len_seq = 10
     item_num = len(item_name)
-    print(f"item_num: {item_num}")
 
+    sasrec_model = None
     if reward_type == "sasrec":
-        model = SASRec(32, item_num, len_seq, 0.3, device)
-        model.to(device)
-        model.load_state_dict(torch.load(cf_path))
-        model.eval()
+        sasrec_model = SASRec(32, item_num, len_seq, 0.3, device)
+        sasrec_model.to(device)
+        sasrec_model.load_state_dict(torch.load(cf_path))
+        sasrec_model.eval()
+
+    item_ada_embd = None
     if reward_type == "semantic":
         with open(ada_path, "rb") as f:
             item_ada_embd = pickle.load(f)
         item_ada_embd = torch.tensor(item_ada_embd).to(llm_model.device)
 
-    print("Load item_ada_embd successfully.")
+    ndcg_rewards = [1.0 / math.log2(i + 2) for i in range(num_generations)]
 
-    ndcg_rewards = [-1.0/math.log2(i+2) for i in range(num_generations)]
-    ndcg_rewards = [-elm/sum(ndcg_rewards) for elm in ndcg_rewards]
-
-
-    def ndcg_rule_reward(prompts, completions):
+    def _targets_from_prompts(prompts: List[str]) -> List[str]:
         history = [prompt2history[prompt] for prompt in prompts]
-        targets = [history2target[elm] for elm in history]
-        repeat = num_generations
+        return [history2target[elm] for elm in history]
+
+    def acc_reward(prompts, completions, **kwargs):
+        targets = _targets_from_prompts(prompts)
         rewards = []
-        flag = False
-        lis = []
-
-        for i, completion in enumerate(completions):
-
-            if completion.strip("\n\"") == targets[i].strip("\n\""):
-                flag = True
-                lis.append(0.0)
-            else:
-                lis.append(ndcg_rewards[i%num_generations])
-            
-            if (i+1)%num_generations == 0:
-                if flag:
-                    rewards.extend(lis)
-                else:
-                    rewards.extend([0.0] * repeat)
-                flag = False
-                lis = []
-        
+        for completion, target in zip(completions, targets):
+            rewards.append(1.0 if completion.strip("\n\" ") == target.strip("\n\" ") else 0.0)
         return rewards
 
-    def rule_reward(prompts, completions):
-        history = [prompt2history[prompt] for prompt in prompts]
-        targets = [history2target[elm] for elm in history]
-        rewards = []
-
-        for i, completion in enumerate(completions):
-
-            if completion.strip("\n\" ") == targets[i].strip("\n\" "):
-                rewards.append(1.0)
+    def rank_reward(prompts, completions, **kwargs):
+        targets = _targets_from_prompts(prompts)
+        rewards: List[float] = []
+        for i, (completion, target) in enumerate(zip(completions, targets)):
+            rank_idx = i % num_generations
+            if completion.strip("\n\" ") == target.strip("\n\" "):
+                rewards.append(ndcg_rewards[rank_idx])
             else:
                 rewards.append(0.0)
         return rewards
 
-    def semantic_reward(prompts, completions):
-        history = [prompt2history[prompt] for prompt in prompts]
-        targets = [history2target[elm] for elm in history]
-        target_ids = [item2id[elm.strip("\"\n")] for elm in targets]
-        completions = [elm.strip("\"\n") for elm in completions]
-        for i, completion in enumerate(completions):
-            if completion not in item2id:
-                print("==============================")
-                print(prompts[i])
-                print(f"Invalid item: {completion}")
-                print("==============================")
-        completion_ids = [item2id[elm] for elm in completions]
-        rewards =  torch.cosine_similarity(item_ada_embd[target_ids], item_ada_embd[completion_ids], dim=-1)
-        print(rewards)
+    def ctr_reward(prompts, completions, click_label=None, **kwargs):
+        targets = _targets_from_prompts(prompts)
+        if click_label is None:
+            click_label = [1.0] * len(completions)
+        rewards: List[float] = []
+        for completion, target, clicked in zip(completions, targets, click_label):
+            is_match = completion.strip("\n\" ") == target.strip("\n\" ")
+            rewards.append(float(clicked) if is_match else 0.0)
+        if normalize_ctr_reward:
+            rewards = _normalize(rewards)
         return rewards
 
-    def cf_reward(prompts, completions):
+    def semantic_reward(prompts, completions, **kwargs):
+        targets = _targets_from_prompts(prompts)
+        target_ids = [item2id[elm.strip("\"\n")] for elm in targets]
+        completions_clean = [elm.strip("\"\n") for elm in completions]
+        completion_ids = [item2id.get(elm, random.randint(0, item_num - 1)) for elm in completions_clean]
+        rewards = torch.cosine_similarity(item_ada_embd[target_ids], item_ada_embd[completion_ids], dim=-1)
+        return rewards.tolist()
+
+    def cf_reward(prompts, completions, **kwargs):
         history = [prompt2history[prompt] for prompt in prompts]
         history_list = [elm.split("::") for elm in history]
         pred_ids = []
-        for i, elm in enumerate(completions):
-            elm = elm.strip("\n\"")
-            if elm not in item_name:
-                # print("========Invalid Item========")
-                # print(f"Invalid item: {elm}")
-                # print(f"Prompt: {prompts[i]}")
-                # print("============================")
-                pred_ids.append(random.randint(0, item_num-1))
-            else:
-                pred_ids.append(item2id[elm])
-        
+        for elm in completions:
+            clean = elm.strip("\n\"")
+            pred_ids.append(item2id.get(clean, random.randint(0, item_num - 1)))
+
         len_lis = []
         history_ids = []
         for his in history_list:
-            his = [item2id[elm] for elm in his]
-            len_lis.append(len(his))
-            if len(his) < len_seq: 
-                his = his + [item_num] * (len_seq - len(his))
-            history_ids.append(his)
-        
-        seq = torch.LongTensor(history_ids).to(device)
-        pred = torch.LongTensor(pred_ids).to(device)    
-        
-        with torch.no_grad():
-            predictions = model.forward_eval(seq, torch.tensor(np.array(len_lis)).to(device))
-            scores = torch.gather(predictions, 1,  pred.view(-1, 1)).view(-1)
-        return scores
-    
+            his_ids = [item2id[elm] for elm in his if elm in item2id]
+            len_lis.append(len(his_ids))
+            if len(his_ids) < len_seq:
+                his_ids = his_ids + [item_num] * (len_seq - len(his_ids))
+            history_ids.append(his_ids[:len_seq])
 
+        seq = torch.LongTensor(history_ids).to(device)
+        pred = torch.LongTensor(pred_ids).to(device)
+
+        with torch.no_grad():
+            predictions = sasrec_model.forward_eval(seq, torch.tensor(np.array(len_lis)).to(device))
+            scores = torch.gather(predictions, 1, pred.view(-1, 1)).view(-1)
+        return scores.tolist()
 
     if reward_type == "rule":
-        reward_fun = rule_reward
-    elif reward_type == "ranking":
-        reward_fun = [rule_reward, ndcg_rule_reward]
+        reward_fun = [acc_reward]
+        reward_weights = [1.0]
     elif reward_type == "ranking_only":
-        reward_fun = ndcg_rule_reward
+        reward_fun = [rank_reward]
+        reward_weights = [1.0]
+    elif reward_type == "ctr_only":
+        reward_fun = [ctr_reward]
+        reward_weights = [1.0]
+    elif reward_type in {"hybrid", "ranking", "ranking_ctr", "all"}:
+        reward_fun = [acc_reward, rank_reward, ctr_reward]
+        reward_weights = [alpha_acc, alpha_rank, alpha_ctr]
     elif reward_type == "semantic":
-        reward_fun = semantic_reward
+        reward_fun = [semantic_reward]
+        reward_weights = [1.0]
     elif reward_type == "sasrec":
-        reward_fun = cf_reward
-    
-    os.environ['WANDB_PROJECT'] = wandb_project
+        reward_fun = [cf_reward]
+        reward_weights = [1.0]
+    else:
+        raise ValueError(f"Unsupported reward_type: {reward_type}")
+
+    os.environ["WANDB_PROJECT"] = wandb_project
     os.environ["WANDB_MODE"] = "offline"
 
-    training_args = GRPOConfig(output_dir=output_dir,
-                                save_steps=0.1,
-                                save_total_limit=20,
-                                eval_strategy="steps",
-                                max_completion_length=128,
-                                num_generations=num_generations,
-                                temperature=temperature,
-                                sync_ref_model=sync_ref_model,
-                                per_device_eval_batch_size=eval_batch_size,
-                                per_device_train_batch_size=train_batch_size,
-                                gradient_accumulation_steps=gradient_accumulation_steps,  
-                                eval_steps=eval_step, 
-                                logging_steps=1, 
-                                learning_rate=learning_rate,
-                                beta=beta,
-                                warmup_ratio=0.03,
-                                max_grad_norm= 0.3,
-                                num_train_epochs=num_train_epochs,
-                                bf16=True,
-                                optim="paged_adamw_32bit",
-                                lr_scheduler_type="cosine", 
-                                save_strategy="steps",
-                                report_to="wandb",
-                                run_name=wandb_run_name,
-                            )
+    training_args = GRPOConfig(
+        output_dir=output_dir,
+        save_steps=0.1,
+        save_total_limit=20,
+        eval_strategy="steps",
+        max_completion_length=128,
+        num_generations=num_generations,
+        temperature=temperature,
+        sync_ref_model=sync_ref_model,
+        per_device_eval_batch_size=eval_batch_size,
+        per_device_train_batch_size=train_batch_size,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        eval_steps=eval_step,
+        logging_steps=1,
+        learning_rate=learning_rate,
+        beta=beta,
+        warmup_ratio=0.03,
+        max_grad_norm=0.3,
+        num_train_epochs=num_train_epochs,
+        bf16=True,
+        optim="paged_adamw_32bit",
+        lr_scheduler_type="cosine",
+        save_strategy="steps",
+        report_to=["tensorboard"],
+        run_name=wandb_run_name,
+        reward_weights=reward_weights,
+    )
+
     trainer = ReReTrainer(
         model=model_path,
         base_model=model_path,
@@ -305,12 +335,12 @@ def train(
     )
 
     trainer.train()
-
     trainer.save_model(output_dir)
 
-    output_dir = os.path.join(output_dir, "final_checkpoint")
-    trainer.model.save_pretrained(output_dir)
-    tokenizer.save_pretrained(output_dir)
-    
+    final_dir = os.path.join(output_dir, "final_checkpoint")
+    trainer.model.save_pretrained(final_dir)
+    AutoTokenizer.from_pretrained(model_path).save_pretrained(final_dir)
+
+
 if __name__ == "__main__":
     Fire(train)
