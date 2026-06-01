@@ -281,7 +281,7 @@ MiniOneRec supports multiple LLM providers for text enrichment tasks (e.g., user
 |----------|-----------------|------------------|----------------|
 | OpenAI | `"openai"` | — | `text-davinci-003` |
 | DeepSeek | `"deepseek"` | `https://api.deepseek.com` | `deepseek-chat` |
-| [MiniMax](https://www.minimaxi.com) | `"minimax"` | `https://api.minimax.io/v1` | `MiniMax-M2.7`, `MiniMax-M2.5` |
+| [MiniMax](https://www.minimaxi.com) | `"minimax"` | `https://api.minimax.io/v1` | `MiniMax-M3`, `MiniMax-M2.7` |
 
 **Example — using MiniMax:**
 
@@ -291,7 +291,7 @@ api_info = {
     "api_key_list": ["your-minimax-api-key"],
     "base_url": "https://api.minimax.io/v1",  # optional, this is the default
 }
-get_res_batch("MiniMax-M2.7", prompt_list, max_tokens=512, api_info=api_info)
+get_res_batch("MiniMax-M3", prompt_list, max_tokens=512, api_info=api_info)
 ```
 
 ---
