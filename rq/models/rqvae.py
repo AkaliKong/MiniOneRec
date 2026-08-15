@@ -1,3 +1,6 @@
+# Modified from AkaliKong/MiniOneRec by zzxAnthony, 2026.
+# Changes: integrate codebook-balance loss and anti-collapse configuration.
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -104,4 +107,3 @@ class RQVAE(nn.Module):
             + self.balance_loss_weight * self.rq.get_balance_loss()
         )
         return loss_total, loss_recon
-

@@ -1,3 +1,6 @@
+# Modified from AkaliKong/MiniOneRec by zzxAnthony, 2026.
+# Changes: code-usage balance loss, EMA monitoring, and dead-code recovery.
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

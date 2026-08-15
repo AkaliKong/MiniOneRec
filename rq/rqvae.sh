@@ -1,3 +1,6 @@
+# Modified from AkaliKong/MiniOneRec by zzxAnthony, 2026.
+# Changes: enable balanced-codebook RQ-VAE defaults.
+
 python rqvae.py \
       --data_path ../data/Amazon/index/Industrial_and_Scientific.emb-qwen-td.npy \
       --ckpt_dir ./output/Industrial_and_Scientific \
@@ -9,4 +12,3 @@ python rqvae.py \
       --usage_ema_decay 0.99 \
       --dead_code_threshold 1e-4 \
       --dead_code_patience 100
-

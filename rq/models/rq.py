@@ -1,3 +1,6 @@
+# Modified from AkaliKong/MiniOneRec by zzxAnthony, 2026.
+# Changes: aggregate per-level balance losses and usage metrics.
+
 import torch
 import torch.nn as nn
 
@@ -83,4 +86,3 @@ class ResidualVectorQuantizer(nn.Module):
         self.last_balance_loss = torch.stack(all_balance_losses).mean()
         all_indices = torch.stack(all_indices, dim=-1)
         return x_q, mean_losses, all_indices
-

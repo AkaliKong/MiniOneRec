@@ -1,3 +1,6 @@
+# Modified from AkaliKong/MiniOneRec by zzxAnthony, 2026.
+# Changes: log codebook utilization and persist validation usage metrics.
+
 import heapq
 import logging
 import math

@@ -1,3 +1,6 @@
+# Modified from AkaliKong/MiniOneRec by zzxAnthony, 2026.
+# Changes: expose balanced-codebook training options and robust boolean parsing.
+
 import argparse
 import logging
 import random
@@ -120,4 +123,3 @@ if __name__ == "__main__":
     best_loss, best_collision_rate = trainer.fit(data_loader)
     print("Best Loss", best_loss)
     print("Best Collision Rate", best_collision_rate)
-
