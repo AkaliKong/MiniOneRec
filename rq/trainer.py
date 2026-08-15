@@ -51,7 +51,14 @@ class Trainer(object):
         if learner == "sgd":
             return optim.SGD(params, lr=self.lr, weight_decay=self.weight_decay)
         if learner == "adagrad":
-            return optim.Adagrad(params, lr=self.lr, weight_decay=self.weight_decay)
+            optimizer = optim.Adagrad(
+                params, lr=self.lr, weight_decay=self.weight_decay
+            )
+            for state in optimizer.state.values():
+                for key, value in state.items():
+                    if torch.is_tensor(value):
+                        state[key] = value.to(self.device)
+            return optimizer
         if learner == "rmsprop":
             return optim.RMSprop(params, lr=self.lr, weight_decay=self.weight_decay)
         if learner == "adamw":
@@ -274,4 +281,3 @@ class Trainer(object):
                     delete_file(old_save[1])
 
         return self.best_loss, self.best_collision_rate
-
