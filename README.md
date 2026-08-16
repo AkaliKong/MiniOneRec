@@ -17,6 +17,42 @@ Scaling Generative Recommendation**
 
 ---
 
+## Fork provenance and balanced-codebook improvements
+
+This repository is derived from
+[AkaliKong/MiniOneRec](https://github.com/AkaliKong/MiniOneRec) and remains
+available under the [Apache License 2.0](./LICENSE). The original MiniOneRec
+authors do not necessarily endorse the modifications in this fork.
+
+Modifications by **zzxAnthony (2026)** improve RQ-VAE codebook utilization and
+reduce codebook collapse during Semantic ID construction:
+
+- **Differentiable balance objective.** Every residual-quantization level adds
+  `KL(p(code) || Uniform)` over batch-level soft assignments. The complete
+  objective becomes reconstruction loss + quantization loss + weighted balance
+  loss.
+- **EMA usage monitoring.** Each codebook tracks code usage, inactivity,
+  utilization, entropy, perplexity, and maximum assignment share.
+- **Deferred dead-code recovery.** Persistently inactive, low-usage codes are
+  reinitialized from high-error residuals. Recovery occurs at the beginning of
+  the next forward pass so it cannot invalidate the current autograd graph.
+- **Training observability.** Per-level utilization metrics are logged during
+  evaluation and stored in checkpoints under `usage_metrics`.
+- **Backward compatibility.** Usage statistics are non-persistent buffers, so
+  existing checkpoints remain loadable. Set `--balance_loss_weight 0` and
+  `--dead_code_patience 0` to reproduce the previous objective.
+
+The default configuration in `rq/rqvae.sh` enables the improvement with a
+balance weight of `0.01`, an EMA decay of `0.99`, a dead-code threshold of
+`1e-4`, and a patience of `100` training steps. See
+[`rq/CODEBOOK_BALANCE.md`](./rq/CODEBOOK_BALANCE.md) for details.
+
+When using this fork in academic work, please cite the original MiniOneRec paper
+listed in the [Citation](#-citation) section and describe the balanced-codebook
+changes separately in the implementation details.
+
+---
+
 ## 📢 Announcement
 
 - 2026-05-13 — We have introduced the new TS-Rec codebase, following the method proposed in [Fine-grained Semantics Integration for Large Language Model-based Recommendation](https://arxiv.org/pdf/2602.22632). We sincerely thank the contributors for their valuable efforts and support in making this update available.
