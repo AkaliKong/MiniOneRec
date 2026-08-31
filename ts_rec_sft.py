@@ -159,6 +159,7 @@ def train(
         print("Training from scratch!")
         
     tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
+    original_vocab_size = len(tokenizer)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.pad_token_id = tokenizer.eos_token_id
 
