@@ -162,11 +162,9 @@ def sinkhorn_balance_level(residuals, centroids, capacities=None, *,
             if remaining[c] > 0:
                 chosen = c
                 break
-        if chosen < 0:                               
-            c = int(np.argmax(probs))
-            if remaining[c] == 0:
-                c = int(np.argmin(remaining))        
-            chosen = c
+        if chosen < 0:
+            avail = np.flatnonzero(remaining > 0)
+            chosen = int(avail[np.argmax(probs[avail])])
         remaining[chosen] -= 1
         assign[i] = chosen
 
