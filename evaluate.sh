@@ -48,8 +48,6 @@ do
                 --batch_size 8 \
                 --num_beams 50 \
                 --max_new_tokens 256 \
-                --temperature 1.0 \
-                --guidance_scale 1.0 \
                 --length_penalty 0.0 &
         else
             echo "Warning: Split file $temp_dir/${i}.csv not found, skipping GPU $i"
