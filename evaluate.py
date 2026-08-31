@@ -174,6 +174,7 @@ def main(
             pad_token_id = model.config.pad_token_id,
             eos_token_id = model.config.eos_token_id,
             max_new_tokens = max_new_tokens,
+            do_sample=False,
             top_k=None,
             top_p=None,
             **kwargs
@@ -192,6 +193,15 @@ def main(
                 torch.tensor(padding_encodings["input_ids"]).to(device),
                 attention_mask=torch.tensor(attention_mask).to(device),
                 generation_config=generation_config,
+                # Passed as a generate() kwarg on purpose. Since transformers
+                # 4.50, values in `generation_config` that equal the *global*
+                # default are overwritten by the model's own generation_config
+                # -- so `do_sample=False` set on the GenerationConfig above is
+                # silently replaced by `do_sample=true` for checkpoints that
+                # ship it (e.g. Qwen2.5-*-Instruct), turning constrained beam
+                # search into sampling and producing invalid SIDs. Only kwargs
+                # take priority over the model defaults.
+                do_sample=False,
                 return_dict_in_generate=True,
                 output_scores=True,
                 logits_processor=logits_processor,
