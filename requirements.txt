@@ -91,6 +91,7 @@ pexpect==4.9.0
 pillow==10.2.0
 platformdirs==4.5.0
 portalocker==2.10.1
+POT==0.9.7
 prompt_toolkit==3.0.47
 protobuf==3.19.6
 psutil==6.0.0
