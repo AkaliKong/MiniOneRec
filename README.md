@@ -195,7 +195,7 @@ bash rq/amazon_text2emb.sh \
 
 ### 3. SID Construction
 
-Choose either 3.1.1, 3.1.2, 3.1.3 or 3.1.4.
+Choose one of 3.1.1 through 3.1.5.
 
 - **3.1.1 Train RQ-VAE on the embeddings**
 ```
@@ -229,6 +229,20 @@ pip install polars
 bash rqkmeans_constrained.sh
 bash rqkmeans_plus.sh
 ```
+
+- **3.1.5 Generate FLASH-based SimHash SIDs (CPU, no tokenizer training)**
+
+```bash
+python rq/generate_indices_flash.py --embeddings data/Office/Office.emb-qwen-td.npy --item-meta data/Office/Office.item.json --output-dir data/Office --dataset Office
+```
+
+This implements the SID construction stage of [FLASH](https://arxiv.org/abs/2610.07402).
+The default output contains three semantic tokens and one collision-resolution
+token, directly producing `Office.index.json`. Use an explicit `--item-ids` JSON
+list if embedding rows do not correspond to contiguous item IDs starting at zero.
+See [the tokenizer guide](rq/FLASH_SID.md) for raw 32-position codes, saved projections,
+collision metrics and catalog-update limitations. FLASH's parallel recommender and
+semantic-alignment training are not included.
 
 - **3.2 Generate indices(only RQ-VAE & RQ-Kmeans+ needed)**
 ```
