@@ -2,8 +2,8 @@
 
 ## Executed checks
 
-Checked on 2026-10-19 against this change on top of the fork's main commit
-`5f4f733cfda387f7f6f8f158db0d300eed9471c6`.
+Checked on 2026-10-19 after synchronizing with upstream `AkaliKong/MiniOneRec`
+main commit `1d6dc4f07efb291064e972cba148e406e907b5f4`.
 
 Environment: macOS arm64, Python 3.12.14, NumPy 2.3.5, pandas 2.2.3 and
 faiss-cpu 1.12.0. No language-model weights or GPU were used.
@@ -30,6 +30,21 @@ a nested source checkout, a pinned-tree manifest or private local paths.
 Dataset classes are extracted from repository sources with AST; only eager
 tokenization is disabled. The tokenizer stand-in raises if asked to tokenize,
 so mapping checks cannot be mistaken for real tokenizer validation.
+
+### Upstream compatibility suite
+
+The existing repository suite was also rerun after conflict resolution:
+
+```bash
+python -m pip install openai==0.28.1 requests==2.32.3 aiohttp==3.10.3
+python -m unittest discover -s tests -v
+```
+
+Result: **59 tests collected, 56 passed and 3 skipped, with no failures**.
+The three skipped tests require a real `MINIMAX_API_KEY`; no live provider calls
+were made. These dependencies were installed in an isolated test directory.
+The upstream suite's existing heavy-dependency mocks remain in use, so its
+success does not establish real language-model training or provider integration.
 
 ### Synthetic catalog workflows
 

@@ -172,9 +172,10 @@ version switch between reads.
 
 ## MiniOneRec integration
 
-This branch updates `data.py` and `ts_rec_data.py` to consume the complete SID,
-including any identity suffix. Item/title/description tasks and Fusion mappings
-therefore preserve distinct items with identical first three semantic tokens.
+This branch preserves upstream's complete-SID concatenation in `data.py` and
+accepts any nonempty SID, including one- or two-token configurations. It also
+updates `ts_rec_data.py` to consume the complete SID, including identity suffixes.
+Item/title/description tasks and Fusion mappings therefore retain the full identity.
 The trainer also constructs independent training and test constraint processors
 with their respective beam counts; answer-wrapper offsets are unchanged.
 
