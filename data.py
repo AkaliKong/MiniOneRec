@@ -699,9 +699,9 @@ class SidItemFeatDataset(JSONBaseDataset):
         for item_id, sids in self.indices.items():
             if item_id in self.item_feat:
                 title = self.item_feat[item_id]['title']
-                # Concatenate all three semantic IDs as the key
-                if len(sids) >= 3:
-                    combined_sid = sids[0] + sids[1] + sids[2]
+                # Preserve the complete item SID, including any identity suffix.
+                if sids:
+                    combined_sid = "".join(sids)
                     self.sid2title[combined_sid] = title
                     self.title2sid[title] = combined_sid
         
@@ -826,9 +826,9 @@ class RLTitle2SidDataset(JSONBaseDataset):
                     except:
                         pass
                 
-                # Concatenate all three semantic IDs as the key
-                if len(sids) >= 3:
-                    combined_sid = sids[0] + sids[1] + sids[2]
+                # Preserve the complete item SID, including any identity suffix.
+                if sids:
+                    combined_sid = "".join(sids)
                     self.sid2title[combined_sid] = title
                     self.title2sid[title] = combined_sid
                     self.sid2description[combined_sid] = description
@@ -991,9 +991,9 @@ class RLSid2TitleDataset(JSONBaseDataset):
         for item_id, sids in self.indices.items():
             if item_id in self.item_feat:
                 title = self.item_feat[item_id]['title']
-                # Concatenate all three semantic IDs as the key
-                if len(sids) >= 3:
-                    combined_sid = sids[0] + sids[1] + sids[2]
+                # Preserve the complete item SID, including any identity suffix.
+                if sids:
+                    combined_sid = "".join(sids)
                     self.sid2title[combined_sid] = title
         
         # Create data samples
@@ -1169,9 +1169,9 @@ class FusionSeqRecDataset(BaseDataset):
                 # 3. If the longest in list is also empty, use title
                 processed_description = self._process_description(description, title)
                 
-                # Concatenate all three semantic IDs as the key
-                if len(sids) >= 3:
-                    combined_sid = sids[0] + sids[1] + sids[2]
+                # Preserve the complete item SID, including any identity suffix.
+                if sids:
+                    combined_sid = "".join(sids)
                     self.sid2title[combined_sid] = title
                     self.sid2description[combined_sid] = processed_description
         # print("self.sid2title: ", self.sid2title)
@@ -1362,8 +1362,8 @@ class TitleHistory2SidSFTDataset(BaseDataset):
         # Build item_id to semantic ID mapping
         self.id2sid = {}
         for item_id, sids in self.indices.items():
-            if len(sids) >= 3:
-                combined_sid = sids[0] + sids[1] + sids[2]
+            if sids:
+                combined_sid = "".join(sids)
                 self.id2sid[item_id] = combined_sid
         
         self.get_inputs()
@@ -1543,9 +1543,9 @@ class PreferenceSFTDataset(BaseDataset):
             item_id_str = str(item_id)
             if item_id_str in self.indices:
                 sids = self.indices[item_id_str]
-                if len(sids) >= 3:
-                    # Combine the three semantic IDs
-                    combined_sid = sids[0] + sids[1] + sids[2]
+                if sids:
+                    # Preserve every token in the complete item SID.
+                    combined_sid = "".join(sids)
                     semantic_ids.append(combined_sid)
                 else:
                     semantic_ids.append(item_id_str)
@@ -1726,9 +1726,9 @@ class UserPreference2sidSFTDataset(BaseDataset):
             item_id_str = str(item_id)
             if item_id_str in self.indices:
                 sids = self.indices[item_id_str]
-                if len(sids) >= 3:
-                    # Combine the three semantic IDs
-                    combined_sid = sids[0] + sids[1] + sids[2]
+                if sids:
+                    # Preserve every token in the complete item SID.
+                    combined_sid = "".join(sids)
                     semantic_ids.append(combined_sid)
                 else:
                     semantic_ids.append(item_id_str)
