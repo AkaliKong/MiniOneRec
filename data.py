@@ -700,7 +700,7 @@ class SidItemFeatDataset(JSONBaseDataset):
             if item_id in self.item_feat:
                 title = self.item_feat[item_id]['title']
                 # Concatenate all semantic IDs as the key
-                if len(sids) >= 3:
+                if sids:
                     combined_sid = ''.join(sids)
                     self.sid2title[combined_sid] = title
                     self.title2sid[title] = combined_sid
@@ -827,7 +827,7 @@ class RLTitle2SidDataset(JSONBaseDataset):
                         pass
                 
                 # Concatenate all semantic IDs as the key
-                if len(sids) >= 3:
+                if sids:
                     combined_sid = ''.join(sids)
                     self.sid2title[combined_sid] = title
                     self.title2sid[title] = combined_sid
@@ -992,7 +992,7 @@ class RLSid2TitleDataset(JSONBaseDataset):
             if item_id in self.item_feat:
                 title = self.item_feat[item_id]['title']
                 # Concatenate all semantic IDs as the key
-                if len(sids) >= 3:
+                if sids:
                     combined_sid = ''.join(sids)
                     self.sid2title[combined_sid] = title
         
@@ -1170,7 +1170,7 @@ class FusionSeqRecDataset(BaseDataset):
                 processed_description = self._process_description(description, title)
                 
                 # Concatenate all semantic IDs as the key
-                if len(sids) >= 3:
+                if sids:
                     combined_sid = ''.join(sids)
                     self.sid2title[combined_sid] = title
                     self.sid2description[combined_sid] = processed_description
@@ -1362,7 +1362,7 @@ class TitleHistory2SidSFTDataset(BaseDataset):
         # Build item_id to semantic ID mapping
         self.id2sid = {}
         for item_id, sids in self.indices.items():
-            if len(sids) >= 3:
+            if sids:
                 combined_sid = ''.join(sids)
                 self.id2sid[item_id] = combined_sid
         
@@ -1543,7 +1543,7 @@ class PreferenceSFTDataset(BaseDataset):
             item_id_str = str(item_id)
             if item_id_str in self.indices:
                 sids = self.indices[item_id_str]
-                if len(sids) >= 3:
+                if sids:
                     # Combine all semantic IDs
                     combined_sid = ''.join(sids)
                     semantic_ids.append(combined_sid)
@@ -1726,7 +1726,7 @@ class UserPreference2sidSFTDataset(BaseDataset):
             item_id_str = str(item_id)
             if item_id_str in self.indices:
                 sids = self.indices[item_id_str]
-                if len(sids) >= 3:
+                if sids:
                     # Combine all semantic IDs
                     combined_sid = ''.join(sids)
                     semantic_ids.append(combined_sid)

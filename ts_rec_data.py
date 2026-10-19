@@ -315,9 +315,9 @@ class SidItemFeatDataset(Dataset):
         for item_id, sids in self.indices.items():
             if item_id in self.item_feat:
                 title = self.item_feat[item_id]['title']
-                # Concatenate all three semantic IDs as the key
-                if len(sids) >= 3:
-                    combined_sid = sids[0] + sids[1] + sids[2]
+                # Preserve the complete item SID, including any identity suffix.
+                if sids:
+                    combined_sid = "".join(sids)
                     self.sid2title[combined_sid] = title
                     self.title2sid[title] = combined_sid
         
@@ -472,9 +472,9 @@ class FusionSeqRecDataset(Dataset):
                 # 3. If the longest in list is also empty, use title
                 processed_description = self._process_description(description, title)
                 
-                # Concatenate all three semantic IDs as the key
-                if len(sids) >= 3:
-                    combined_sid = sids[0] + sids[1] + sids[2]
+                # Preserve the complete item SID, including any identity suffix.
+                if sids:
+                    combined_sid = "".join(sids)
                     self.sid2title[combined_sid] = title
                     self.sid2description[combined_sid] = processed_description
         # print("self.sid2title: ", self.sid2title)

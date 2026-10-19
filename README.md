@@ -195,7 +195,7 @@ bash rq/amazon_text2emb.sh \
 
 ### 3. SID Construction
 
-Choose one of 3.1.1 through 3.1.5.
+Choose one of 3.1.1 through 3.1.6.
 
 - **3.1.1 Train RQ-VAE on the embeddings**
 ```
@@ -243,6 +243,16 @@ list if embedding rows do not correspond to contiguous item IDs starting at zero
 See [the tokenizer guide](rq/FLASH_SID.md) for raw 32-position codes, saved projections,
 collision metrics and catalog-update limitations. FLASH's parallel recommender and
 semantic-alignment training are not included.
+
+- **3.1.6 Optional PRQ-KMeans and RQ-OPQ builders**
+
+The CPU builders in [`sid_generation/`](sid_generation/README.md) accept item
+embeddings and directly export MiniOneRec indexes, saved quantizers, item
+mappings and collision statistics. PRQ-KMeans uses sequential projection
+residuals; RQ-OPQ combines an RQ prefix with ordered OPQ subcodes. See the linked
+English guide for installation, commands, collision handling and validation
+limits. A collision suffix can increase SID length; this branch preserves the
+complete SID in the auxiliary dataset tasks.
 
 - **3.2 Generate indices(only RQ-VAE & RQ-Kmeans+ needed)**
 ```
@@ -313,7 +323,7 @@ get_res_batch("MiniMax-M2.7", prompt_list, max_tokens=512, api_info=api_info)
 ## 📝 Upcoming Features
 
 We are actively extending MiniOneRec’s capabilities. The following enhancements are already on our roadmap:
-* ⏱️ **More SID Construction Algorithms**: forthcoming support for R-VQ, RQ-Kmeans, RQ-OPQ, and RQ-VAE-v2 (PLUM).
+* ⏱️ **More SID Construction Algorithms**: forthcoming support for R-VQ, RQ-Kmeans, and RQ-VAE-v2 (PLUM).
 * ⚙️ **MiniOneRec-Think**: a module that seamlessly integrates dialogue, reasoning, and personalized recommendation, providing an all-in-one solution for complex interactive scenarios.
 * 🔍 **Broader Dataset Support**: additional popular public datasets, including Yelp, to further validate the generality of our algorithms.
 

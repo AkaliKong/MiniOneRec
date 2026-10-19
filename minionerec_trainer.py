@@ -697,7 +697,13 @@ class ReReTrainer(Trainer):
                 eos_token_id=self.processing_class.eos_token_id
             )
         self.logits_processor = LogitsProcessorList([TemperatureLogitsWarper(temperature=self.temperature), ccc])
-        self.test_lp_list = LogitsProcessorList([ccc])
+        # Each generate() call needs its own step counter and beam grouping.
+        self.test_lp_list = LogitsProcessorList([ConstrainedLogitsProcessor(
+            prefix_allowed_tokens_fn=self.prefix_allowed_tokens_fn,
+            num_beams=self.test_beam,
+            base_model=self.base_model,
+            eos_token_id=self.processing_class.eos_token_id,
+        )])
 
         # Generate completions using either vLLM or regular generation
         if self.args.use_vllm:
