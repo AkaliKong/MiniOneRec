@@ -349,7 +349,7 @@ class TestMiniMaxIntegration(unittest.TestCase):
             "api_key_list": [self.api_key],
         }
         results = text2emb_utils.get_res_batch(
-            "MiniMax-M2.5", ["Say 'hello' in one word."], 10, api_info
+            "MiniMax-M3", ["Say 'hello' in one word."], 10, api_info
         )
         self.assertEqual(len(results), 1)
         self.assertIn("hello", results[0].lower())
@@ -364,7 +364,7 @@ class TestMiniMaxIntegration(unittest.TestCase):
             "What is 2+2? Answer with just the number.",
         ]
         results = text2emb_utils.get_res_batch(
-            "MiniMax-M2.5", prompts, 64, api_info
+            "MiniMax-M3", prompts, 64, api_info
         )
         self.assertEqual(len(results), 2)
         self.assertTrue(len(results[0]) > 0)
@@ -382,7 +382,7 @@ class TestMiniMaxIntegration(unittest.TestCase):
             review="Great sound quality and comfortable fit. Battery lasts all day."
         )
         results = text2emb_utils.get_res_batch(
-            "MiniMax-M2.5", [prompt], 256, api_info
+            "MiniMax-M3", [prompt], 256, api_info
         )
         self.assertEqual(len(results), 1)
         self.assertTrue(len(results[0]) > 0)
