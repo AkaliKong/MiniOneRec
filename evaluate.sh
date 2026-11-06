@@ -39,7 +39,9 @@ do
     do
         if [[ -f "$temp_dir/${i}.csv" ]]; then
             echo "Starting evaluation on GPU $i for category ${category}"
-            CUDA_VISIBLE_DEVICES=$i python -u ./evaluate.py \
+            # transfer_to_npu remaps the torch.cuda API but not the visible-device
+            # env vars, so set the NPU equivalent too; CUDA ignores it.
+            CUDA_VISIBLE_DEVICES=$i ASCEND_RT_VISIBLE_DEVICES=$i python -u ./evaluate.py \
                 --base_model "$exp_name" \
                 --info_file "$info_file" \
                 --category ${category} \

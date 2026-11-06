@@ -1,3 +1,4 @@
+import npu_support
 import os
 import sys
 from typing import List

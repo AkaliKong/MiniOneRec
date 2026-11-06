@@ -1,3 +1,4 @@
+import npu_support
 from datasets import Dataset
 from trl import GRPOConfig, GRPOTrainer
 import random
@@ -35,6 +36,7 @@ def train(
     eval_file: str = "",
     info_file: str = "",
     category: str = "",
+    sample: int = -1,
     
     # wandb params
     wandb_project: str = "",
@@ -81,7 +83,6 @@ def train(
         item_name = [_.split('\t')[0].strip() for _ in info]
         item2id = {name: i for i, name in enumerate(item_name)}
 
-    sample = -1
     train_datasets = []
     # train_data = D3Dataset(train_file, category=category_dict[category], sample=sample)
     # train_datasets.append(train_data)
@@ -89,7 +90,7 @@ def train(
     train_datasets.append(train_data1)
     train_data2 = RLTitle2SidDataset(item_file=item_meta_path, index_file=sid_index_path, category=category_dict[category], sample=sample)
     train_datasets.append(train_data2)
-    train_data3 = RLSeqTitle2SidDataset(train_file, category=category_dict[category], sample=10000)
+    train_data3 = RLSeqTitle2SidDataset(train_file, category=category_dict[category], sample=sample if sample > 0 else 10000)
     train_datasets.append(train_data3)
     # train_data4 = RLSid2TitleDataset(item_file=item_meta_path, index_file=sid_index_path, category=category_dict[category], sample=sample)
     # train_datasets.append(train_data4)
@@ -279,7 +280,7 @@ def train(
                                 max_grad_norm= 0.3,
                                 num_train_epochs=num_train_epochs,
                                 bf16=True,
-                                optim="paged_adamw_32bit",
+                                optim=("adamw_torch" if npu_support.IS_NPU else "paged_adamw_32bit"),
                                 lr_scheduler_type="cosine", 
                                 save_strategy="steps",
                                 report_to="wandb",

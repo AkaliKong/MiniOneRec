@@ -1,3 +1,4 @@
+import npu_support
 from datasets import Dataset
 from trl import GRPOConfig, GRPOTrainer
 import random

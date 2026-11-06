@@ -1,3 +1,4 @@
+import npu_support
 import numpy as np
 import pandas as pd
 import argparse

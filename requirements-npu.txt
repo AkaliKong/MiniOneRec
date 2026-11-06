@@ -1,0 +1,67 @@
+# MiniOneRec — Ascend NPU dependency set
+#
+# Install this INSTEAD of requirements.txt on Ascend NPU (CANN 9.1.0) machines.
+# Target stack (validated): torch 2.9.0 + torch_npu 2.9.0.post2 + CANN 9.1.0.
+#
+# CUDA-only packages (nvidia-*, torchrec, fbgemm_gpu, triton, torchaudio) are
+# intentionally omitted — they have no NPU build and/or are unused by this
+# project. bitsandbytes is kept because the entry scripts still import it (it is
+# never used for quantization) and 0.48.1 ships an aarch64 wheel.
+# The HuggingFace stack versions match requirements.txt.
+#
+# The core set below was validated for the SFT + constrained-decoding
+# evaluation path, and the single-card RL (GRPO) smoke, which additionally
+# needs the trl / scikit-learn / wandb lines further down. On a CUDA or CPU
+# machine you should keep using the original requirements.txt; this file is
+# NPU-only.
+
+torch==2.9.0
+torch_npu==2.9.0.post2
+
+transformers==4.57.1
+accelerate==1.10.1
+datasets==4.2.0
+tokenizers==0.22.1
+
+# Imported by sft.py / evaluate.py / sft_gpr.py / ts_rec_sft.py but never used
+# (no quantization is performed). Present so the source needs no edits.
+bitsandbytes==0.48.1
+
+fire==0.7.1
+pandas==2.2.2
+tqdm
+# requirements.txt pins numpy==1.26.3, which the image's SciPy rejects
+# (it needs numpy>=2.0); keep the CUDA pin out of the NPU set.
+numpy>=2.0,<2.8
+# requirements.txt also locks safetensors==0.6.2 (a pip-freeze export).
+# Nothing here imports safetensors directly -- it is only transformers'
+# storage backend, and transformers 4.57.1 asks for >=0.4.3.
+safetensors>=0.4.3,<1.0
+modelscope
+
+# --- Optional, uncomment if you need them -----------------------------------
+# Multi-card DDP SFT / RL: DeepSpeed has a native NPU accelerator and
+# transfer_to_npu remaps the torch.cuda device plumbing automatically.
+# deepspeed==0.18.0
+#
+# RL / GRPO with use_vllm=False (the non-vLLM generate path works on NPU).
+# NOTE: the vLLM rollout path is CUDA-only and is NOT supported on NPU —
+# always keep use_vllm=False when running RL on NPU. rl.py needs scikit-learn
+# (ndcg_score) and imports sasrec.py as the reward model, which imports wandb
+# at module level.
+# trl==0.24.0
+# scikit-learn
+# wandb==0.22.2
+#
+# SID construction (rq/ scripts + rq/text2emb): not needed for SFT/eval.
+# openai / aiohttp / requests are imported by rq/text2emb/utils.py, polars by
+# rq/generate_indices_plus.py, faiss-cpu by rq/rqkmeans_faiss.py, POT by its
+# optimal-transport assignment step. The SID generators added upstream
+# (rq/flash_sid, sid_generation/) are plain numpy/scikit-learn and need
+# nothing extra here.
+# polars
+# openai
+# aiohttp
+# requests
+# faiss-cpu
+# POT==0.9.7

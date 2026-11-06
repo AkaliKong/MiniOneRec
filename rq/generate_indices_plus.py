@@ -1,3 +1,6 @@
+import pathlib, sys
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))  # repo root, holds npu_support.py
+import npu_support
 import argparse
 import torch
 import torch.nn as nn

@@ -1,3 +1,4 @@
+import npu_support
 
 import pandas as pd
 import fire
