@@ -1,0 +1,5 @@
+-r requirements-hierarchical.txt
+pytest>=8,<10
+pandas>=2.2,<3
+transformers>=4.51,<5
+torch==2.9.1

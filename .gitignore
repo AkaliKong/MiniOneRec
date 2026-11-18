@@ -2,3 +2,7 @@ __pycache__/
 *.py[cod]
 /.venv-sid/
 /outputs/sid/
+
+# Hierarchical K-Means environment and example outputs
+/.venv-hierarchical/
+/outputs/hierarchical/
