@@ -1,0 +1,5 @@
+# Optional CPU-only tree builder; no neural framework required.
+numpy>=2.1.1,<3
+scikit-learn>=1.6,<1.8
+k-means-constrained==0.9.0
+threadpoolctl>=3.1,<4
